@@ -25,6 +25,9 @@ class CoffeeAnalysisGUI:
         self.root.title("Анализ продаж кофе - Гранит ДБ")
         self.root.geometry("1200x800")
         
+        # Обработчик закрытия окна
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
         # Переменные
         self.db_connector = None
         self.sales_data = None
@@ -90,7 +93,10 @@ class CoffeeAnalysisGUI:
         
         # Кнопка подключения
         self.connect_btn = ttk.Button(conn_frame, text="Подключиться", command=self.connect_to_db)
-        self.connect_btn.grid(row=2, column=0, pady=(10, 0))
+        self.connect_btn.grid(row=2, column=0, pady=(10, 0), padx=(0, 5))
+        
+        self.disconnect_btn = ttk.Button(conn_frame, text="Отключиться", command=self.disconnect_from_db, state="disabled")
+        self.disconnect_btn.grid(row=2, column=1, pady=(10, 0))
         
         # Статус подключения
         self.connection_status = ttk.Label(conn_frame, text="Не подключено", foreground="red")
@@ -229,6 +235,8 @@ class CoffeeAnalysisGUI:
                     logger.info("Тест подключения прошел успешно")
                     self.connection_status.config(text="Подключено", foreground="green")
                     self.generate_btn.config(state="normal")
+                    self.connect_btn.config(state="disabled")
+                    self.disconnect_btn.config(state="normal")
                     self.load_stores()
                     messagebox.showinfo("Успех", "Подключение к базе данных установлено!")
                 else:
@@ -245,6 +253,40 @@ class CoffeeAnalysisGUI:
             logger.error(traceback.format_exc())
             self.connection_status.config(text="Ошибка", foreground="red")
             messagebox.showerror("Ошибка", f"Ошибка подключения: {str(e)}")
+    
+    def disconnect_from_db(self):
+        """Безопасное отключение от базы данных"""
+        logger.info("Отключение от базы данных")
+        try:
+            if self.db_connector:
+                self.db_connector.disconnect()
+                self.db_connector = None
+                self.connection_status.config(text="Отключено", foreground="gray")
+                self.generate_btn.config(state="disabled")
+                self.export_btn.config(state="disabled")
+                self.connect_btn.config(state="normal")
+                self.disconnect_btn.config(state="disabled")
+                # Очищаем список магазинов
+                for widget in self.stores_frame.winfo_children():
+                    widget.destroy()
+                logger.info("Отключение от БД выполнено успешно")
+        except Exception as e:
+            logger.error(f"Ошибка при отключении от БД: {e}")
+            messagebox.showwarning("Предупреждение", f"Ошибка при отключении: {str(e)}")
+    
+    def on_closing(self):
+        """Обработчик закрытия окна"""
+        logger.info("Закрытие приложения")
+        try:
+            # Безопасно отключаемся от БД
+            if self.db_connector:
+                self.disconnect_from_db()
+            # Закрываем окно
+            self.root.destroy()
+        except Exception as e:
+            logger.error(f"Ошибка при закрытии приложения: {e}")
+            # Принудительно закрываем окно
+            self.root.destroy()
             
     def load_stores(self):
         """Загрузка списка магазинов"""
@@ -317,7 +359,7 @@ class CoffeeAnalysisGUI:
         logger.info("Начало генерации отчета")
         if not self.db_connector:
             logger.error("Нет подключения к БД для генерации отчета")
-            messagebox.showerror("Ошибка", "Сначала подключитесь к базе данных!")
+            messagebox.showinfo("Ошибка", "Сначала подключитесь к базе данных!")
             return
             
         try:
@@ -326,34 +368,34 @@ class CoffeeAnalysisGUI:
             logger.info(f"Выбранные магазины: {selected_stores}")
             if not selected_stores:
                 logger.warning("Не выбрано ни одного магазина")
-                messagebox.showerror("Ошибка", "Выберите хотя бы один магазин!")
+                messagebox.showinfo("Ошибка", "Выберите хотя бы один магазин!")
                 return
                 
             start_date = self.start_date_var.get()
             end_date = self.end_date_var.get()
             logger.info(f"Период анализа: {start_date} - {end_date}")
                 
-            # Загружаем данные с группировкой по типам кофе
-            logger.info("Загрузка данных о продажах кофе")
-            self.sales_data = self.db_connector.get_coffee_sales_by_type(
+            # Загружаем данные с правильным расчетом килограммов
+            logger.info("Загрузка данных о продажах кофе с пачками")
+            self.sales_data = self.db_connector.get_coffee_sales_with_packages(
                 store_ids=selected_stores,
                 start_date=start_date,
                 end_date=end_date
             )
             logger.info(f"Загружено {len(self.sales_data)} записей о продажах")
             
+            if self.sales_data.empty:
+                logger.warning("Нет данных за выбранный период")
+                messagebox.showinfo("Информация", "Нет данных за выбранный период!")
+                return
+            
             # Переименовываем колонки для совместимости
             logger.info("Переименование колонок")
             self.sales_data = self.sales_data.rename(columns={
                 'ALLCUP': 'QUANTITY',
-                'MONOCUP': 'MonoCup',
-                'BLENDCUP': 'BlendCup',
-                'CAOTINACUP': 'CaotinaCup',
-                'TOTAL_SUM': 'TOTAL_SUM'
+                'PACKAGES_KG': 'TOTAL_WEIGHT_KG',
+                'TOTAL_CASH': 'TOTAL_SUM'
             })
-            
-            # Добавляем колонку с общим весом (приблизительно 0.25 кг на чашку)
-            self.sales_data['TOTAL_WEIGHT_KG'] = self.sales_data['QUANTITY'] * 0.25
             
             # Преобразуем даты
             self.sales_data['ORDER_DATE'] = pd.to_datetime(self.sales_data['ORDER_DATE'])
@@ -390,8 +432,8 @@ class CoffeeAnalysisGUI:
         # Группируем данные
         grouped = self.sales_data.groupby(['STORE_NAME', 'TIME_PERIOD']).agg({
             'QUANTITY': 'sum',  # Чашки (AllCup)
-            'TOTAL_WEIGHT_KG': 'sum',  # Килограммы
-            'TOTAL_SUM': 'sum',  # Общая сумма
+            'TOTAL_WEIGHT_KG': 'sum',  # Килограммы (PACKAGES_KG)
+            'TOTAL_SUM': 'sum',  # Общая сумма (TOTAL_CASH)
         }).reset_index()
         
         # Создаем сводную таблицу
@@ -440,9 +482,9 @@ class CoffeeAnalysisGUI:
                 # Формируем ячейку в зависимости от стиля
                 display_style = self.display_style_var.get()
                 if display_style == "detailed":
-                    cell_content = f"Чашки: {cups:.0f} шт\nКг: {kg:.2f} кг\nСумма: {total:.2f}"
+                    cell_content = f"Чашки: {cups:.0f} шт\nКг: {kg:.2f} кг\nСумма: {total:.2f} лари"
                 else:  # compact
-                    cell_content = f"☕ {cups:.0f}шт\n📦 {kg:.1f}кг\n💰 {total:.0f}"
+                    cell_content = f"☕ {cups:.0f}шт\n📦 {kg:.1f}кг\n💰 {total:.0f} лари"
                 values.append(cell_content)
                 
             self.tree.insert('', 'end', values=values)

@@ -95,6 +95,15 @@ class CoffeeAnalysis:
         
         return summary
     
+    def get_sales_statistics(self) -> Dict[str, Any]:
+        """
+        Получение статистики продаж (алиас для get_sales_summary)
+        
+        Returns:
+            Dict: Статистика продаж
+        """
+        return self.get_sales_summary()
+    
     def sales_by_store(self) -> pd.DataFrame:
         """
         Анализ продаж по магазинам

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Coffee Sales Analysis Tool - Main Application
+Coffee Sales Analysis Tool - GUI Launcher
 
-GUI приложение для анализа продаж кофе из базы данных Firebird.
+Запуск GUI приложения с настройкой логирования.
 """
 
 import sys
@@ -17,10 +17,10 @@ from src.gui_app import CoffeeAnalysisGUI
 from src.logger_config import setup_logger
 
 def main():
-    """Главная функция приложения."""
+    """Запуск GUI приложения."""
     # Настройка логирования
     logger = setup_logger()
-    logger.info("Запуск Coffee Sales Analysis Tool")
+    logger.info("Запуск GUI приложения")
     
     try:
         # Создание и запуск GUI
@@ -28,7 +28,7 @@ def main():
         app.run()
         
     except Exception as e:
-        logger.error(f"Ошибка при запуске приложения: {e}")
+        logger.error(f"Ошибка при запуске GUI: {e}")
         print(f"Ошибка: {e}")
         return 1
     
