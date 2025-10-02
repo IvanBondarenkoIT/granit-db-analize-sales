@@ -23,22 +23,22 @@ def check_python_version():
 
 def check_virtual_environment():
     """Проверка виртуального окружения."""
-    print("\n🔧 Проверка виртуального окружения...")
+    print("\nПроверка виртуального окружения...")
     
     if Path("venv").exists():
-        print("✅ Виртуальное окружение найдено")
+        print("OK: Виртуальное окружение найдено")
         return True
     else:
-        print("❌ Виртуальное окружение не найдено")
+        print("ОШИБКА: Виртуальное окружение не найдено")
         return False
 
 def check_dependencies():
     """Проверка зависимостей."""
-    print("\n📦 Проверка зависимостей...")
+    print("\nПроверка зависимостей...")
     
     required_packages = [
         'fdb', 'pandas', 'matplotlib', 'seaborn', 
-        'plotly', 'jupyter', 'python-dotenv', 'tqdm', 'openpyxl'
+        'plotly', 'jupyter', 'dotenv', 'tqdm', 'openpyxl'
     ]
     
     missing_packages = []
@@ -46,25 +46,25 @@ def check_dependencies():
     for package in required_packages:
         try:
             __import__(package)
-            print(f"✅ {package} - OK")
+            print(f"OK: {package}")
         except ImportError:
-            print(f"❌ {package} - НЕ УСТАНОВЛЕН")
+            print(f"ОШИБКА: {package} - НЕ УСТАНОВЛЕН")
             missing_packages.append(package)
     
     if missing_packages:
-        print(f"\n⚠️ Отсутствуют пакеты: {', '.join(missing_packages)}")
+        print(f"\nВНИМАНИЕ: Отсутствуют пакеты: {', '.join(missing_packages)}")
         return False
     else:
-        print("\n✅ Все зависимости установлены")
+        print("\nOK: Все зависимости установлены")
         return True
 
 def check_database_config():
     """Проверка конфигурации базы данных."""
-    print("\n🗄️ Проверка конфигурации базы данных...")
+    print("\nПроверка конфигурации базы данных...")
     
     config_file = Path("config.env")
     if config_file.exists():
-        print("✅ Файл config.env найден")
+        print("OK: Файл config.env найден")
         
         # Читаем конфигурацию
         with open(config_file, 'r', encoding='utf-8') as f:
@@ -75,40 +75,40 @@ def check_database_config():
         
         for var in required_vars:
             if f"{var}=" in content:
-                print(f"✅ {var} - настроен")
+                print(f"OK: {var} - настроен")
             else:
-                print(f"❌ {var} - НЕ НАСТРОЕН")
+                print(f"ОШИБКА: {var} - НЕ НАСТРОЕН")
                 missing_vars.append(var)
         
         if missing_vars:
-            print(f"\n⚠️ Отсутствуют переменные: {', '.join(missing_vars)}")
+            print(f"\nВНИМАНИЕ: Отсутствуют переменные: {', '.join(missing_vars)}")
             return False
         else:
-            print("\n✅ Конфигурация базы данных корректна")
+            print("\nOK: Конфигурация базы данных корректна")
             return True
     else:
-        print("❌ Файл config.env не найден")
+        print("ОШИБКА: Файл config.env не найден")
         return False
 
 def check_directories():
     """Проверка необходимых директорий."""
-    print("\n📁 Проверка директорий...")
+    print("\nПроверка директорий...")
     
     required_dirs = ['src', 'logs', 'output', 'reports', 'data']
     missing_dirs = []
     
     for directory in required_dirs:
         if Path(directory).exists():
-            print(f"✅ {directory}/ - OK")
+            print(f"OK: {directory}/")
         else:
-            print(f"❌ {directory}/ - НЕ НАЙДЕНА")
+            print(f"ОШИБКА: {directory}/ - НЕ НАЙДЕНА")
             missing_dirs.append(directory)
     
     if missing_dirs:
-        print(f"\n⚠️ Отсутствуют директории: {', '.join(missing_dirs)}")
+        print(f"\nВНИМАНИЕ: Отсутствуют директории: {', '.join(missing_dirs)}")
         return False
     else:
-        print("\n✅ Все директории найдены")
+        print("\nOK: Все директории найдены")
         return True
 
 def main():
@@ -130,14 +130,14 @@ def main():
         if check():
             passed += 1
     
-    print(f"\n📈 Результаты проверки: {passed}/{total} проверок пройдено")
+    print(f"\nРезультаты проверки: {passed}/{total} проверок пройдено")
     
     if passed == total:
-        print("🎉 Система готова к работе!")
+        print("УСПЕХ: Система готова к работе!")
         return 0
     else:
-        print("⚠️ Требуется настройка системы!")
-        print("\n📋 Рекомендации:")
+        print("ВНИМАНИЕ: Требуется настройка системы!")
+        print("\nРекомендации:")
         print("1. Запустите install.py для установки зависимостей")
         print("2. Настройте config.env с параметрами базы данных")
         print("3. Создайте необходимые директории")
