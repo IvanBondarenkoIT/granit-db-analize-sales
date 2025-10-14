@@ -7,8 +7,9 @@ import pandas as pd
 from datetime import datetime, timedelta
 import os
 import traceback
-from database_connector import DatabaseConnector
-from logger_config import setup_logger
+from .database_connector import DatabaseConnector
+from .remote_db_connector import RemoteDatabaseConnector
+from .logger_config import setup_logger
 # from multi_line_treeview import MultiLineTreeview
 import re
 
@@ -33,6 +34,7 @@ class CoffeeAnalysisGUI:
         self.sales_data = None
         self.stores_data = None
         self.products_data = None
+        self.db_type = "local"  # Тип БД: "local" или "remote"
         
         # Создаем интерфейс
         try:
@@ -75,34 +77,95 @@ class CoffeeAnalysisGUI:
         conn_frame = ttk.LabelFrame(parent, text="Подключение к базе данных", padding="10")
         conn_frame.grid(row=row, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         
-        # Путь к БД
-        ttk.Label(conn_frame, text="Путь к БД:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
+        # Выбор типа БД
+        db_type_frame = ttk.Frame(conn_frame)
+        db_type_frame.grid(row=0, column=0, columnspan=4, sticky=tk.W, pady=(0, 10))
+        
+        ttk.Label(db_type_frame, text="Тип БД:").pack(side=tk.LEFT, padx=(0, 10))
+        
+        self.db_type_var = tk.StringVar(value="local")
+        ttk.Radiobutton(db_type_frame, text="Локальная БД", 
+                        variable=self.db_type_var, value="local",
+                        command=self.on_db_type_change).pack(side=tk.LEFT, padx=(0, 15))
+        ttk.Radiobutton(db_type_frame, text="Удаленная БД (только чтение)", 
+                        variable=self.db_type_var, value="remote",
+                        command=self.on_db_type_change).pack(side=tk.LEFT)
+        
+        # Фрейм для локальной БД
+        self.local_frame = ttk.Frame(conn_frame)
+        self.local_frame.grid(row=1, column=0, columnspan=4, sticky=(tk.W, tk.E), pady=(0, 5))
+        
+        # Путь к локальной БД
+        ttk.Label(self.local_frame, text="Путь к БД:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
         self.db_path_var = tk.StringVar(value="D:\\Granit DB\\GEORGIA.GDB")
-        ttk.Entry(conn_frame, textvariable=self.db_path_var, width=50).grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(0, 5))
-        ttk.Button(conn_frame, text="Обзор", command=self.browse_db_file).grid(row=0, column=2)
+        ttk.Entry(self.local_frame, textvariable=self.db_path_var, width=50).grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(0, 5))
+        ttk.Button(self.local_frame, text="Обзор", command=self.browse_db_file).grid(row=0, column=2)
+        
+        # Фрейм для удаленной БД
+        self.remote_frame = ttk.Frame(conn_frame)
+        self.remote_frame.grid(row=1, column=0, columnspan=4, sticky=(tk.W, tk.E), pady=(0, 5))
+        self.remote_frame.grid_remove()  # Скрыть по умолчанию
+        
+        # Сервер
+        ttk.Label(self.remote_frame, text="Сервер:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
+        self.remote_host_var = tk.StringVar(value="85.114.224.45")
+        ttk.Entry(self.remote_frame, textvariable=self.remote_host_var, width=20).grid(row=0, column=1, sticky=tk.W, padx=(0, 5))
+        
+        ttk.Label(self.remote_frame, text="Порт:").grid(row=0, column=2, sticky=tk.W, padx=(10, 5))
+        self.remote_port_var = tk.StringVar(value="3055")
+        ttk.Entry(self.remote_frame, textvariable=self.remote_port_var, width=8).grid(row=0, column=3, sticky=tk.W)
+        
+        # Алиас БД
+        ttk.Label(self.remote_frame, text="Алиас БД:").grid(row=1, column=0, sticky=tk.W, padx=(0, 5), pady=(5, 0))
+        self.remote_db_var = tk.StringVar(value="DK_GEORGIA")
+        ttk.Entry(self.remote_frame, textvariable=self.remote_db_var, width=20).grid(row=1, column=1, sticky=tk.W, padx=(0, 5), pady=(5, 0))
+        
+        ttk.Label(self.remote_frame, text="🔒 READ-ONLY режим", 
+                  foreground="green", font=('Arial', 9, 'bold')).grid(row=1, column=2, columnspan=2, sticky=tk.W, padx=(10, 0), pady=(5, 0))
+        
+        # Общие параметры (пользователь и пароль)
+        cred_frame = ttk.Frame(conn_frame)
+        cred_frame.grid(row=2, column=0, columnspan=4, sticky=(tk.W, tk.E), pady=(10, 0))
         
         # Пользователь
-        ttk.Label(conn_frame, text="Пользователь:").grid(row=1, column=0, sticky=tk.W, padx=(0, 5), pady=(5, 0))
+        ttk.Label(cred_frame, text="Пользователь:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
         self.db_user_var = tk.StringVar(value="SYSDBA")
-        ttk.Entry(conn_frame, textvariable=self.db_user_var, width=20).grid(row=1, column=1, sticky=tk.W, padx=(0, 5), pady=(5, 0))
+        ttk.Entry(cred_frame, textvariable=self.db_user_var, width=20).grid(row=0, column=1, sticky=tk.W, padx=(0, 5))
         
         # Пароль
-        ttk.Label(conn_frame, text="Пароль:").grid(row=1, column=2, sticky=tk.W, padx=(20, 5), pady=(5, 0))
+        ttk.Label(cred_frame, text="Пароль:").grid(row=0, column=2, sticky=tk.W, padx=(20, 5))
         self.db_password_var = tk.StringVar(value="masterkey")
-        ttk.Entry(conn_frame, textvariable=self.db_password_var, show="*", width=20).grid(row=1, column=3, sticky=tk.W, pady=(5, 0))
+        ttk.Entry(cred_frame, textvariable=self.db_password_var, show="*", width=20).grid(row=0, column=3, sticky=tk.W)
         
-        # Кнопка подключения
-        self.connect_btn = ttk.Button(conn_frame, text="Подключиться", command=self.connect_to_db)
-        self.connect_btn.grid(row=2, column=0, pady=(10, 0), padx=(0, 5))
+        # Кнопки подключения
+        btn_frame = ttk.Frame(conn_frame)
+        btn_frame.grid(row=3, column=0, columnspan=4, sticky=tk.W, pady=(10, 0))
         
-        self.disconnect_btn = ttk.Button(conn_frame, text="Отключиться", command=self.disconnect_from_db, state="disabled")
-        self.disconnect_btn.grid(row=2, column=1, pady=(10, 0))
+        self.connect_btn = ttk.Button(btn_frame, text="Подключиться", command=self.connect_to_db)
+        self.connect_btn.grid(row=0, column=0, padx=(0, 5))
+        
+        self.disconnect_btn = ttk.Button(btn_frame, text="Отключиться", command=self.disconnect_from_db, state="disabled")
+        self.disconnect_btn.grid(row=0, column=1, padx=(0, 5))
         
         # Статус подключения
-        self.connection_status = ttk.Label(conn_frame, text="Не подключено", foreground="red")
-        self.connection_status.grid(row=2, column=1, sticky=tk.W, padx=(10, 0), pady=(10, 0))
+        self.connection_status_var = tk.StringVar(value="Не подключено")
+        self.connection_status_label = ttk.Label(btn_frame, textvariable=self.connection_status_var, foreground="red")
+        self.connection_status_label.grid(row=0, column=2, padx=(15, 0))
         
         conn_frame.columnconfigure(1, weight=1)
+    
+    def on_db_type_change(self):
+        """Обработчик переключения типа БД"""
+        db_type = self.db_type_var.get()
+        
+        if db_type == "local":
+            self.local_frame.grid()
+            self.remote_frame.grid_remove()
+            logger.info("Переключено на локальную БД")
+        else:
+            self.local_frame.grid_remove()
+            self.remote_frame.grid()
+            logger.info("Переключено на удаленную БД")
         
     def create_parameters_section(self, parent, row):
         """Создание секции параметров отчета"""
@@ -212,56 +275,93 @@ class CoffeeAnalysisGUI:
             self.db_path_var.set(filename)
             
     def connect_to_db(self):
-        """Подключение к базе данных"""
-        logger.info("Попытка подключения к базе данных")
+        """Подключение к базе данных (локальной или удаленной)"""
+        db_type = self.db_type_var.get()
+        logger.info(f"Попытка подключения к {db_type} базе данных")
+        
         try:
-            db_path = self.db_path_var.get()
             user = self.db_user_var.get()
             password = self.db_password_var.get()
             
-            logger.info(f"Параметры подключения: путь={db_path}, пользователь={user}")
-            
-            self.db_connector = DatabaseConnector(
-                db_path=db_path,
-                user=user,
-                password=password
-            )
-            
-            logger.info("Создан объект DatabaseConnector")
-            
-            if self.db_connector.connect():
-                logger.info("Подключение к БД установлено")
-                if self.db_connector.test_connection():
-                    logger.info("Тест подключения прошел успешно")
-                    self.connection_status.config(text="Подключено", foreground="green")
-                    self.generate_btn.config(state="normal")
-                    self.connect_btn.config(state="disabled")
-                    self.disconnect_btn.config(state="normal")
-                    self.load_stores()
-                    messagebox.showinfo("Успех", "Подключение к базе данных установлено!")
+            if db_type == "local":
+                # Подключение к локальной БД
+                db_path = self.db_path_var.get()
+                logger.info(f"Локальная БД: путь={db_path}, пользователь={user}")
+                
+                self.db_connector = DatabaseConnector(
+                    db_path=db_path,
+                    user=user,
+                    password=password
+                )
+                
+                if self.db_connector.connect():
+                    logger.info("Подключение к локальной БД установлено")
+                    if self.db_connector.test_connection():
+                        self._on_connection_success("Локальная БД")
+                    else:
+                        self._on_connection_failed("Тест подключения не прошел")
                 else:
-                    logger.error("Тест подключения не прошел")
-                    self.connection_status.config(text="Ошибка тестирования", foreground="red")
-                    messagebox.showerror("Ошибка", "Не удалось протестировать подключение!")
+                    self._on_connection_failed("Не удалось подключиться")
+                    
             else:
-                logger.error("Не удалось подключиться к БД")
-                self.connection_status.config(text="Ошибка подключения", foreground="red")
-                messagebox.showerror("Ошибка", "Не удалось подключиться к базе данных!")
+                # Подключение к удаленной БД
+                host = self.remote_host_var.get()
+                port = int(self.remote_port_var.get())
+                database = self.remote_db_var.get()
+                
+                logger.info(f"Удаленная БД: {host}:{port}/{database}, пользователь={user}")
+                
+                self.db_connector = RemoteDatabaseConnector(
+                    host=host,
+                    port=port,
+                    database_path=database,
+                    user=user,
+                    password=password
+                )
+                
+                # Тест подключения к удаленной БД
+                success, message = self.db_connector.test_connection()
+                if success:
+                    logger.info("Подключение к удаленной БД установлено")
+                    self._on_connection_success("Удаленная БД (READ-ONLY)")
+                else:
+                    self._on_connection_failed(f"Ошибка: {message}")
                 
         except Exception as e:
             logger.error(f"Ошибка подключения к БД: {e}")
             logger.error(traceback.format_exc())
-            self.connection_status.config(text="Ошибка", foreground="red")
-            messagebox.showerror("Ошибка", f"Ошибка подключения: {str(e)}")
+            self._on_connection_failed(str(e))
+    
+    def _on_connection_success(self, db_type_name):
+        """Обработчик успешного подключения"""
+        logger.info(f"Подключение к {db_type_name} успешно")
+        self.connection_status_var.set(f"Подключено ({db_type_name})")
+        self.connection_status_label.config(foreground="green")
+        self.generate_btn.config(state="normal")
+        self.connect_btn.config(state="disabled")
+        self.disconnect_btn.config(state="normal")
+        self.load_stores()
+        messagebox.showinfo("Успех", f"Подключение к {db_type_name} установлено!")
+    
+    def _on_connection_failed(self, error_message):
+        """Обработчик неудачного подключения"""
+        logger.error(f"Ошибка подключения: {error_message}")
+        self.connection_status_var.set("Ошибка подключения")
+        self.connection_status_label.config(foreground="red")
+        messagebox.showerror("Ошибка", f"Не удалось подключиться к БД!\n{error_message}")
     
     def disconnect_from_db(self):
         """Безопасное отключение от базы данных"""
         logger.info("Отключение от базы данных")
         try:
             if self.db_connector:
-                self.db_connector.disconnect()
+                # Для локальной БД вызываем disconnect(), для удаленной просто удаляем объект
+                if isinstance(self.db_connector, DatabaseConnector):
+                    self.db_connector.disconnect()
                 self.db_connector = None
-                self.connection_status.config(text="Отключено", foreground="gray")
+                
+                self.connection_status_var.set("Отключено")
+                self.connection_status_label.config(foreground="gray")
                 self.generate_btn.config(state="disabled")
                 self.export_btn.config(state="disabled")
                 self.connect_btn.config(state="normal")
@@ -297,7 +397,14 @@ class CoffeeAnalysisGUI:
             
         try:
             logger.info("Получение информации о магазинах из БД")
-            self.stores_data = self.db_connector.get_stores_info()
+            
+            # Для удаленной БД используем execute_query_to_dataframe
+            if isinstance(self.db_connector, RemoteDatabaseConnector):
+                query = "SELECT ID, NAME FROM STORGRP ORDER BY NAME"
+                self.stores_data = self.db_connector.execute_query_to_dataframe(query)
+            else:
+                self.stores_data = self.db_connector.get_stores_info()
+                
             logger.info(f"Загружено {len(self.stores_data)} магазинов")
             
             # Очищаем предыдущие чекбоксы
@@ -377,11 +484,18 @@ class CoffeeAnalysisGUI:
                 
             # Загружаем данные с правильным расчетом килограммов
             logger.info("Загрузка данных о продажах кофе с пачками")
-            self.sales_data = self.db_connector.get_coffee_sales_with_packages(
-                store_ids=selected_stores,
-                start_date=start_date,
-                end_date=end_date
-            )
+            
+            if isinstance(self.db_connector, RemoteDatabaseConnector):
+                # Для удаленной БД выполняем запрос напрямую
+                self.sales_data = self._get_remote_sales_data(selected_stores, start_date, end_date)
+            else:
+                # Для локальной БД используем существующий метод
+                self.sales_data = self.db_connector.get_coffee_sales_with_packages(
+                    store_ids=selected_stores,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+            
             logger.info(f"Загружено {len(self.sales_data)} записей о продажах")
             
             if self.sales_data.empty:
@@ -412,6 +526,73 @@ class CoffeeAnalysisGUI:
             logger.error(f"Ошибка генерации отчета: {e}")
             logger.error(traceback.format_exc())
             messagebox.showerror("Ошибка", f"Ошибка генерации отчета: {str(e)}")
+    
+    def _get_remote_sales_data(self, store_ids, start_date, end_date):
+        """Получение данных о продажах из удаленной БД"""
+        logger.info("Получение данных из удаленной БД")
+        
+        # Формируем список ID магазинов для SQL запроса
+        store_ids_str = ','.join([str(sid) for sid in store_ids])
+        
+        # Запрос 1: Данные о чашках и суммах
+        cups_query = f"""
+        SELECT 
+            stgp.name as STORE_NAME,
+            D.DAT_ as ORDER_DATE,
+            COUNT(*) AS ALLCUP,
+            SUM(D.SUMMA) AS TOTAL_CASH
+        FROM STORZAKAZDT D 
+        JOIN STORGRP stgp ON D.STORGRPID = stgp.ID 
+        WHERE D.STORGRPID IN ({store_ids_str})
+        AND D.CSDTKTHBID IN ('1', '2', '3') 
+        AND D.DAT_ >= '{start_date}' AND D.DAT_ <= '{end_date}'
+        GROUP BY stgp.name, D.DAT_
+        """
+        
+        # Запрос 2: Килограммы пачек
+        packages_query = f"""
+        SELECT 
+            stgp.name as STORE_NAME,
+            D.DAT_ as ORDER_DATE,
+            SUM(GD.SOURCE) as PACKAGES_KG
+        FROM STORZAKAZDT D 
+        JOIN STORZDTGDS GD ON D.ID = GD.SZID 
+        JOIN Goods G ON GD.GodsID = G.ID 
+        JOIN STORGRP stgp ON D.STORGRPID = stgp.id 
+        WHERE D.STORGRPID IN ({store_ids_str})
+        AND D.CSDTKTHBID IN ('1', '2', '3') 
+        AND D.DAT_ >= '{start_date}' AND D.DAT_ <= '{end_date}'
+        AND (
+            (G.NAME LIKE '%250 g%' OR G.NAME LIKE '%250г%' OR
+             G.NAME LIKE '%500 g%' OR G.NAME LIKE '%500г%' OR
+             G.NAME LIKE '%1 kg%' OR G.NAME LIKE '%1кг%' OR
+             G.NAME LIKE '%200 g%' OR G.NAME LIKE '%200г%' OR
+             G.NAME LIKE '%125 g%' OR G.NAME LIKE '%125г%')
+            AND (G.NAME LIKE '%Coffee%' OR G.NAME LIKE '%кофе%' OR 
+                 G.NAME LIKE '%Кофе%' OR G.NAME LIKE '%Blaser%')
+        )
+        GROUP BY stgp.name, D.DAT_
+        """
+        
+        logger.info("Выполнение запроса чашек и сумм...")
+        df_cups = self.db_connector.execute_query_to_dataframe(cups_query)
+        
+        logger.info("Выполнение запроса килограммов...")
+        df_packages = self.db_connector.execute_query_to_dataframe(packages_query)
+        
+        # Объединяем данные
+        df = df_cups.merge(
+            df_packages,
+            on=['STORE_NAME', 'ORDER_DATE'],
+            how='left'
+        )
+        
+        # Заполняем пропущенные килограммы нулями
+        df['PACKAGES_KG'] = df['PACKAGES_KG'].fillna(0)
+        
+        logger.info(f"Получено {len(df)} записей из удаленной БД")
+        
+        return df
             
     def create_report_table(self):
         """Создание таблицы отчета"""

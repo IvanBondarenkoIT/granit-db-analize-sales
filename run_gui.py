@@ -13,6 +13,7 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root / "src"))
 
+import tkinter as tk
 from src.gui_app import CoffeeAnalysisGUI
 from src.logger_config import setup_logger
 
@@ -23,9 +24,12 @@ def main():
     logger.info("Запуск GUI приложения")
     
     try:
-        # Создание и запуск GUI
-        app = CoffeeAnalysisGUI()
-        app.run()
+        # Создание главного окна
+        root = tk.Tk()
+        # Создание GUI
+        app = CoffeeAnalysisGUI(root)
+        # Запуск главного цикла
+        root.mainloop()
         
     except Exception as e:
         logger.error(f"Ошибка при запуске GUI: {e}")
