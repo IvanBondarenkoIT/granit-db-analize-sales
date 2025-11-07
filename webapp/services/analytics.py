@@ -30,14 +30,6 @@ def aggregate_sales(records: Iterable[Dict[str, object]]) -> Dict[str, float]:
     }
 
 
-def group_sales_by_store(records: Iterable[Dict[str, object]]) -> Dict[str, List[Dict[str, object]]]:
-    grouped: Dict[str, List[Dict[str, object]]] = defaultdict(list)
-    for row in records:
-        store = str(row.get("STORE_NAME", ""))
-        grouped[store].append(row)
-    return grouped
-
-
 def build_table_rows(records: Iterable[Dict[str, object]]) -> List[Dict[str, object]]:
     rows: List[Dict[str, object]] = []
     for row in records:

@@ -156,7 +156,7 @@ class ProxyApiClient:
             LEFT JOIN GOODSGROUPS GG ON G.OWNER = GG.ID
             WHERE D.STORGRPID IN ({placeholders})
               AND D.CSDTKTHBID IN ('1', '2', '3', '5')
-              AND D.DAT_ >= ? AND D.DАТ_ <= ?
+              AND D.DAT_ >= ? AND D.DAT_ <= ?
               AND (
                     (
                         (G.NAME LIKE '%250 g%' OR G.NAME LIKE '%250г%' OR
@@ -172,8 +172,8 @@ class ProxyApiClient:
                     )
                     OR (GG.NAME LIKE '%Caotina swiss chocolate drink (package)%')
               )
-            GROUP BY stgp.NAME, D.ДАТ_
-            ORDER BY stgp.NAME, D.ДАТ_
+            GROUP BY stgp.NAME, D.DAT_
+            ORDER BY stgp.NAME, D.DAT_
         """
 
         cups = self.execute_query(cups_query, params=params)

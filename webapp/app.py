@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from flask import Flask, render_template, request
@@ -35,7 +35,7 @@ def _parse_int(value: str | None) -> Optional[int]:
 
 
 def _default_dates() -> tuple[str, str]:
-    today = datetime.utcnow().date()
+    today = datetime.now(timezone.utc).date()
     start = today.replace(day=1)
     return start.isoformat(), today.isoformat()
 
