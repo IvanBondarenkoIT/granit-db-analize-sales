@@ -9,6 +9,12 @@ import os
 import traceback
 from .database_connector import DatabaseConnector
 from .remote_db_connector import RemoteDatabaseConnector
+from .proxy_api_connector import (
+    ProxyApiAuthError,
+    ProxyApiConnector,
+    ProxyApiError,
+    ProxyApiRateLimitError,
+)
 from .logger_config import setup_logger
 # from multi_line_treeview import MultiLineTreeview
 import re
@@ -84,12 +90,27 @@ class CoffeeAnalysisGUI:
         ttk.Label(db_type_frame, text="Тип БД:").pack(side=tk.LEFT, padx=(0, 10))
         
         self.db_type_var = tk.StringVar(value="local")
-        ttk.Radiobutton(db_type_frame, text="Локальная БД", 
-                        variable=self.db_type_var, value="local",
-                        command=self.on_db_type_change).pack(side=tk.LEFT, padx=(0, 15))
-        ttk.Radiobutton(db_type_frame, text="Удаленная БД (только чтение)", 
-                        variable=self.db_type_var, value="remote",
-                        command=self.on_db_type_change).pack(side=tk.LEFT)
+        ttk.Radiobutton(
+            db_type_frame,
+            text="Локальная БД",
+            variable=self.db_type_var,
+            value="local",
+            command=self.on_db_type_change,
+        ).pack(side=tk.LEFT, padx=(0, 15))
+        ttk.Radiobutton(
+            db_type_frame,
+            text="Удаленная БД (только чтение)",
+            variable=self.db_type_var,
+            value="remote",
+            command=self.on_db_type_change,
+        ).pack(side=tk.LEFT, padx=(0, 15))
+        ttk.Radiobutton(
+            db_type_frame,
+            text="Удаленная БД (через API)",
+            variable=self.db_type_var,
+            value="proxy",
+            command=self.on_db_type_change,
+        ).pack(side=tk.LEFT)
         
         # Фрейм для локальной БД
         self.local_frame = ttk.Frame(conn_frame)
@@ -122,6 +143,30 @@ class CoffeeAnalysisGUI:
         
         ttk.Label(self.remote_frame, text="🔒 READ-ONLY режим", 
                   foreground="green", font=('Arial', 9, 'bold')).grid(row=1, column=2, columnspan=2, sticky=tk.W, padx=(10, 0), pady=(5, 0))
+
+        # Фрейм для Proxy API
+        self.proxy_frame = ttk.Frame(conn_frame)
+        self.proxy_frame.grid(row=1, column=0, columnspan=4, sticky=(tk.W, tk.E), pady=(0, 5))
+        self.proxy_frame.grid_remove()
+
+        ttk.Label(self.proxy_frame, text="API URL:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
+        self.proxy_url_var = tk.StringVar(value=os.getenv("PROXY_API_URL", "http://85.114.224.45:8000"))
+        ttk.Entry(self.proxy_frame, textvariable=self.proxy_url_var, width=40).grid(row=0, column=1, columnspan=3, sticky=(tk.W, tk.E))
+
+        ttk.Label(self.proxy_frame, text="Основной токен:").grid(row=1, column=0, sticky=tk.W, padx=(0, 5), pady=(5, 0))
+        self.proxy_token_var = tk.StringVar(value=os.getenv("PROXY_API_TOKEN", ""))
+        ttk.Entry(self.proxy_frame, textvariable=self.proxy_token_var, show="*", width=45).grid(row=1, column=1, columnspan=3, sticky=(tk.W, tk.E), pady=(5, 0))
+
+        ttk.Label(self.proxy_frame, text="Резервный токен (опц.):").grid(row=2, column=0, sticky=tk.W, padx=(0, 5), pady=(5, 0))
+        self.proxy_fallback_token_var = tk.StringVar(value=os.getenv("PROXY_API_FALLBACK_TOKEN", ""))
+        ttk.Entry(self.proxy_frame, textvariable=self.proxy_fallback_token_var, show="*", width=45).grid(row=2, column=1, columnspan=3, sticky=(tk.W, tk.E), pady=(5, 0))
+
+        ttk.Label(
+            self.proxy_frame,
+            text="Токены хранятся в config/proxy_api.env и не попадают в git",
+            font=("Arial", 8, "italic"),
+            foreground="gray",
+        ).grid(row=3, column=0, columnspan=4, sticky=tk.W, pady=(5, 0))
         
         # Общие параметры (пользователь и пароль)
         cred_frame = ttk.Frame(conn_frame)
@@ -161,11 +206,18 @@ class CoffeeAnalysisGUI:
         if db_type == "local":
             self.local_frame.grid()
             self.remote_frame.grid_remove()
+            self.proxy_frame.grid_remove()
             logger.info("Переключено на локальную БД")
-        else:
+        elif db_type == "remote":
             self.local_frame.grid_remove()
             self.remote_frame.grid()
+            self.proxy_frame.grid_remove()
             logger.info("Переключено на удаленную БД")
+        else:
+            self.local_frame.grid_remove()
+            self.remote_frame.grid_remove()
+            self.proxy_frame.grid()
+            logger.info("Переключено на удаленную БД через API")
         
     def create_parameters_section(self, parent, row):
         """Создание секции параметров отчета"""
@@ -273,6 +325,14 @@ class CoffeeAnalysisGUI:
         )
         if filename:
             self.db_path_var.set(filename)
+
+    def _mask_secret(self, value: str) -> str:
+        """Маскирует секреты при логировании."""
+        if not value:
+            return "—"
+        if len(value) <= 8:
+            return "***"
+        return f"{value[:4]}***{value[-4:]}"
             
     def connect_to_db(self):
         """Подключение к базе данных (локальной или удаленной)"""
@@ -303,7 +363,7 @@ class CoffeeAnalysisGUI:
                 else:
                     self._on_connection_failed("Не удалось подключиться")
                     
-            else:
+            elif db_type == "remote":
                 # Подключение к удаленной БД
                 host = self.remote_host_var.get()
                 port = int(self.remote_port_var.get())
@@ -324,6 +384,34 @@ class CoffeeAnalysisGUI:
                 if success:
                     logger.info("Подключение к удаленной БД установлено")
                     self._on_connection_success("Удаленная БД (READ-ONLY)")
+                else:
+                    self._on_connection_failed(f"Ошибка: {message}")
+
+            else:
+                # Подключение через Proxy API
+                api_url = self.proxy_url_var.get().strip()
+                primary_token = self.proxy_token_var.get().strip()
+                fallback_token = self.proxy_fallback_token_var.get().strip() or None
+
+                masked_primary = self._mask_secret(primary_token)
+                masked_fallback = self._mask_secret(fallback_token or "")
+                logger.info(
+                    "Proxy API: url=%s, primary_token=%s, fallback_token=%s",
+                    api_url,
+                    masked_primary,
+                    masked_fallback,
+                )
+
+                self.db_connector = ProxyApiConnector(
+                    api_url=api_url,
+                    primary_token=primary_token or None,
+                    fallback_token=fallback_token,
+                )
+
+                success, message = self.db_connector.test_connection()
+                if success:
+                    logger.info("Подключение через Proxy API установлено")
+                    self._on_connection_success("Удаленная БД (API READ-ONLY)")
                 else:
                     self._on_connection_failed(f"Ошибка: {message}")
                 
@@ -358,6 +446,8 @@ class CoffeeAnalysisGUI:
                 # Для локальной БД вызываем disconnect(), для удаленной просто удаляем объект
                 if isinstance(self.db_connector, DatabaseConnector):
                     self.db_connector.disconnect()
+                elif isinstance(self.db_connector, ProxyApiConnector):
+                    self.db_connector.close()
                 self.db_connector = None
                 
                 self.connection_status_var.set("Отключено")
@@ -399,7 +489,9 @@ class CoffeeAnalysisGUI:
             logger.info("Получение информации о магазинах из БД")
             
             # Для удаленной БД используем execute_query_to_dataframe
-            if isinstance(self.db_connector, RemoteDatabaseConnector):
+            if isinstance(self.db_connector, ProxyApiConnector):
+                self.stores_data = self.db_connector.get_stores_dataframe()
+            elif isinstance(self.db_connector, RemoteDatabaseConnector):
                 query = "SELECT ID, NAME FROM STORGRP ORDER BY NAME"
                 self.stores_data = self.db_connector.execute_query_to_dataframe(query)
             else:
@@ -485,7 +577,9 @@ class CoffeeAnalysisGUI:
             # Загружаем данные с правильным расчетом килограммов
             logger.info("Загрузка данных о продажах кофе с пачками")
             
-            if isinstance(self.db_connector, RemoteDatabaseConnector):
+            if isinstance(self.db_connector, ProxyApiConnector):
+                self.sales_data = self._get_proxy_sales_data(selected_stores, start_date, end_date)
+            elif isinstance(self.db_connector, RemoteDatabaseConnector):
                 # Для удаленной БД выполняем запрос напрямую
                 self.sales_data = self._get_remote_sales_data(selected_stores, start_date, end_date)
             else:
@@ -592,6 +686,43 @@ class CoffeeAnalysisGUI:
         
         logger.info(f"Получено {len(df)} записей из удаленной БД")
         
+        return df
+
+    def _get_proxy_sales_data(self, store_ids, start_date, end_date):
+        """Получение данных о продажах через Proxy API"""
+        logger.info("Получение данных через Proxy API")
+        if not isinstance(self.db_connector, ProxyApiConnector):
+            raise ValueError("Proxy API connector is not initialized")
+
+        try:
+            df = self.db_connector.get_sales_data(store_ids, start_date, end_date)
+        except ProxyApiRateLimitError as e:
+            logger.warning(f"Превышен лимит запросов Proxy API: {e}")
+            messagebox.showwarning(
+                "Лимит запросов",
+                "Превышен лимит запросов API. Подождите минуту и попробуйте снова.",
+            )
+            return pd.DataFrame(columns=["STORE_NAME", "ORDER_DATE", "ALLCUP", "PACKAGES_KG", "TOTAL_CASH"])
+        except ProxyApiAuthError as e:
+            logger.error(f"Ошибка аутентификации Proxy API: {e}")
+            messagebox.showerror("Ошибка", "Ошибка аутентификации API. Проверьте токен.")
+            return pd.DataFrame(columns=["STORE_NAME", "ORDER_DATE", "ALLCUP", "PACKAGES_KG", "TOTAL_CASH"])
+        except ProxyApiError as e:
+            logger.error(f"Ошибка Proxy API: {e}")
+            raise
+
+        if df.empty:
+            return df
+
+        for column in ["STORE_NAME", "ORDER_DATE", "ALLCUP", "PACKAGES_KG", "TOTAL_CASH"]:
+            if column not in df.columns:
+                df[column] = 0 if column != "STORE_NAME" and column != "ORDER_DATE" else None
+
+        df["PACKAGES_KG"] = df["PACKAGES_KG"].fillna(0)
+        df["ALLCUP"] = df["ALLCUP"].fillna(0)
+        df["TOTAL_CASH"] = df["TOTAL_CASH"].fillna(0)
+
+        logger.info(f"Получено {len(df)} записей из Proxy API")
         return df
             
     def create_report_table(self):

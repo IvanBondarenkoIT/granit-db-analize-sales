@@ -21,6 +21,8 @@ xlsxwriter==3.1.9
 # Utilities
 python-dotenv==1.0.0
 tqdm==4.66.1
+requests==2.31.0
+urllib3==2.1.0
 
 # Development
 pytest==7.4.3

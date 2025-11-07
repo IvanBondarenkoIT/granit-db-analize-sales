@@ -64,6 +64,12 @@ Thumbs.db
 credentials.json
 config.json
 config.env
+config/proxy_api.env
+web/backend/env
+web/frontend/.next/
+web/frontend/node_modules/
+web/frontend/.env
+web/frontend/.env.local
 
 # System files
 AppData/
