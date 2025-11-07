@@ -18,6 +18,11 @@ GUI приложение для анализа продаж кофе из баз
 
 **Быстрый старт:** Прочитайте [`PROXY_QUICK_START.md`](PROXY_QUICK_START.md) для начала работы.
 
+### Web Dashboard (Next.js)
+- Ветка `web-proxy-ui` содержит веб-дашборд (`web/frontend`) и backend-прокси (`web/backend`).
+- README по веб-проекту: `web/README.md`.
+- Инструкция по деплою на Railway: `docs/RAILWAY_DEPLOYMENT.md`.
+
 ### Использование в GUI
 
 1. Скопируйте `config/proxy_api.env.example` → `config/proxy_api.env` и впишите реальные `PROXY_API_URL` и токены (`PROXY_API_TOKEN`, при необходимости резервный).
