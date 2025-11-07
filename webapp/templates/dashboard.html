@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Дашборд{% endblock %}
+
+{% block content %}
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h5 class="card-title text-muted">Магазины</h5>
+          <p class="display-6">{{ stores_count }}</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h5 class="card-title text-muted">Сумма продаж (₾)</h5>
+          <p class="display-6">{{ totals.total_sales | round(2) }}</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h5 class="card-title text-muted">Всего чашек</h5>
+          <p class="display-6">{{ totals.total_cups | round(0) }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Быстрый обзор продаж</h5>
+      <p class="text-muted">Последние 10 записей ({{ period.start }} — {{ period.end }}).</p>
+      {% if rows %}
+        <div class="table-responsive">
+          <table class="table table-striped align-middle">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">Магазин</th>
+                <th scope="col">Дата</th>
+                <th scope="col" class="text-end">Чашки</th>
+                <th scope="col" class="text-end">Пачки (кг)</th>
+                <th scope="col" class="text-end">Сумма (₾)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows[:10] %}
+                <tr>
+                  <td>{{ row.store_name }}</td>
+                  <td>{{ row.order_date.strftime('%d.%m.%Y') }}</td>
+                  <td class="text-end">{{ row.allcup | round(0) }}</td>
+                  <td class="text-end">{{ row.packages_kg | round(2) }}</td>
+                  <td class="text-end text-success">{{ row.total_cash | round(2) }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <a class="btn btn-outline-primary" href="{{ url_for('sales_table') }}">Перейти к полной таблице</a>
+      {% else %}
+        <p class="text-muted">Данные не найдены.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <h5 class="card-title">Состояние Proxy API</h5>
+      {% if health %}
+        <dl class="row">
+          <dt class="col-sm-3">Статус</dt>
+          <dd class="col-sm-9 text-success">{{ health.status }}</dd>
+          <dt class="col-sm-3">Среда</dt>
+          <dd class="col-sm-9">{{ health.environment }}</dd>
+          <dt class="col-sm-3">БД доступна</dt>
+          <dd class="col-sm-9">{{ 'Да' if health.proxy_api.database_connected else 'Нет' }}</dd>
+        </dl>
+      {% else %}
+        <p class="text-muted">Нет информации о состоянии API.</p>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

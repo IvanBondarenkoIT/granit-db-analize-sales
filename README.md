@@ -23,6 +23,11 @@ GUI приложение для анализа продаж кофе из баз
 - README по веб-проекту: `web/README.md`.
 - Инструкция по деплою на Railway: `docs/RAILWAY_DEPLOYMENT.md`.
 
+### Flask Monolith (в разработке)
+- Ветка `flask-monolith`, директория `webapp/`.
+- Flask + Bootstrap (Jinja2), минимум JS, Mobile-first.
+- Локальный запуск и деплой: `webapp/README.md` и раздел «Приложение Flask» в `docs/RAILWAY_DEPLOYMENT.md`.
+
 ### Использование в GUI
 
 1. Скопируйте `config/proxy_api.env.example` → `config/proxy_api.env` и впишите реальные `PROXY_API_URL` и токены (`PROXY_API_TOKEN`, при необходимости резервный).
